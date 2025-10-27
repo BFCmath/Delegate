@@ -1,0 +1,58 @@
+ID: 51
+  - Total Time: 54.11 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 5
+---
+ID: 58
+  - Total Time: 47.52 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 66
+  - Total Time: 186.32 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 71
+  - Total Time: 115.30 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 75
+  - Total Time: 25.60 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 79
+  - Total Time: 125.13 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 81
+  - Total Time: 29.27 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 83
+  - Total Time: 50.34 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 85
+  - Total Time: 50.53 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+ID: 87
+  - Total Time: 69.83 seconds
+  - LLM API Calls: 2
+  - Searches Conducted: 4
+---
+
+====================
+  BATCH SUMMARY
+====================
+Total Prompts Processed: 10
+Average Time per Prompt: 75.39 seconds
+Total LLM API Calls: 20
+Total Searches Conducted: 41

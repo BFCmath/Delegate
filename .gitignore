@@ -61,7 +61,6 @@ backup/
 # Google Drive mount (Colab)
 drive/
 
-SEPARATE_EXPERIMENTS_GUIDE.md
 
-
-
+.cursor/
+*.md

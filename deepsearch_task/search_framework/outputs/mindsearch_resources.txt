@@ -1,0 +1,13 @@
+ID: 51
+  - Total Time: 164.89 seconds
+  - LLM API Calls: 7
+  - Searches Conducted: 7
+---
+
+====================
+  BATCH SUMMARY
+====================
+Total Prompts Processed: 1
+Average Time per Prompt: 164.89 seconds
+Total LLM API Calls: 7
+Total Searches Conducted: 7

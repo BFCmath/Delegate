@@ -9,6 +9,10 @@ unsloth  # Optional: 2x faster inference + 4-bit quantization for Qwen models
 pandas>=2.0.0
 datasets>=4.0.0
 
+# Search Tools (for Deep Research experiments)
+duckduckgo-search>=4.0.0  # Free search, no API key needed
+tavily-python  # Optional: Higher quality search, requires TAVILY_API_KEY
+
 # Utilities
 python-dotenv>=1.0.0
 

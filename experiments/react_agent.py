@@ -172,7 +172,7 @@ class ReActAgent:
             elif action["type"] == "Search":
                 search_count += 1
                 query = action["query"]
-                print(f"    🔍 Search #{search_count}: {query[:60]}...")
+                print(f"    🔍 Search #{search_count}: {query}")
                 
                 # Execute search
                 try:

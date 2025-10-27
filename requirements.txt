@@ -15,6 +15,7 @@ tavily-python  # Optional: Higher quality search, requires TAVILY_API_KEY
 
 # Utilities
 python-dotenv>=1.0.0
+tavily-python
 
 # Visualization (optional, for analyze_results.py)
 matplotlib>=3.7.0

@@ -25,7 +25,8 @@ load_dotenv()
 async def run_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
-    max_iterations: int = 10
+    max_iterations: int = 10,
+    debug_file: str = None
 ):
     """
     Run LLM-only deep research experiment with Gemini + ReAct.
@@ -34,6 +35,7 @@ async def run_llm_deepresearch_experiment(
         test_df: DataFrame with columns: id, prompt
         output_file: Path to save results (JSONL format)
         max_iterations: Max search iterations per query
+        debug_file: Optional path to save debug info (full ReAct pipeline)
         
     Returns:
         Summary dict with metrics
@@ -47,6 +49,12 @@ async def run_llm_deepresearch_experiment(
     # Prepare output file (overwrite if exists)
     with open(output_file, 'w') as f:
         pass  # Clear file
+    
+    # Prepare debug file if requested
+    if debug_file:
+        with open(debug_file, 'w') as f:
+            pass  # Clear file
+        print(f"🐛 Debug mode enabled - saving full ReAct traces to {debug_file}")
     
     # Track metrics
     total_time = 0.0
@@ -100,6 +108,18 @@ async def run_llm_deepresearch_experiment(
             with open(output_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(output_record, ensure_ascii=False) + '\n')
             
+            # Save debug info if requested
+            if debug_file:
+                debug_record = {
+                    "id": int(row["id"]),
+                    "prompt": row["prompt"],
+                    "metadata": result.metadata,
+                    "react_pipeline": result.scratchpad,  # Full Thought/Action/Observation trace
+                    "article": result.article[:200] + "..." if len(result.article) > 200 else result.article
+                }
+                with open(debug_file, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(debug_record, ensure_ascii=False, indent=2) + '\n')
+            
             print(f"✅ Completed in {latency:.2f}s | Searches: {result.metadata['search_count']} | Iterations: {result.metadata['iterations']}")
             
         except Exception as e:
@@ -112,6 +132,17 @@ async def run_llm_deepresearch_experiment(
             }
             with open(output_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(error_record, ensure_ascii=False) + '\n')
+            
+            # Save error to debug file too
+            if debug_file:
+                debug_error_record = {
+                    "id": int(row["id"]),
+                    "prompt": row["prompt"],
+                    "error": str(e),
+                    "react_pipeline": []
+                }
+                with open(debug_file, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(debug_error_record, ensure_ascii=False, indent=2) + '\n')
     
     # Calculate summary
     n_total = len(test_df)

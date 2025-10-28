@@ -7,7 +7,7 @@ REACT_SYSTEM_PROMPT = """You are a research assistant in the RESEARCH PHASE. You
 
 WORKFLOW:
 1. Thought: Analyze what information you need
-2. Action: Search[query] to find that information  
+2. Action: Search[query] to find that information
 3. Observation: Review the search results I provide
 4. Repeat steps 1-3 until you have sufficient information
 5. Signal: RESEARCH_COMPLETE when you have enough data
@@ -16,19 +16,6 @@ ACTIONS:
 - Search[query]: Search the web
   
 - RESEARCH_COMPLETE: Signal that research is done
-  Use this when you have gathered enough information to answer the question
-
-RULES:
-- Always show your Thought before each Action
-- Make needed search queries
-- When you have sufficient data, output: RESEARCH_COMPLETE
-
-EXAMPLE:
-Thought: I need demographic data for Japan's elderly population.
-Action: Search[...]
-
-Thought: I have enough information about demographics.
-Action: RESEARCH_COMPLETE
 """
 
 REACT_USER_PROMPT = """Research Question: {question}

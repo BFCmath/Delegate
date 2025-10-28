@@ -142,30 +142,51 @@ class ReActAgent:
             # Build full context
             full_context = "\n\n".join(scratchpad)
             
-            # Get LLM response
-            try:
-                if self.is_local_model:
-                    # Local model (synchronous)
-                    response = self.model.generate(full_context)
-                else:
-                    # API model (async)
-                    if self.use_key_rotation:
-                        # Get fresh model with next API key for this iteration
-                        current_model = self.model.get_model(**self.model_config)
-                        response = await asyncio.to_thread(
-                            current_model.generate_content,
-                            full_context
-                        )
+            # Get LLM response with retry logic
+            max_retries = 3
+            retry_count = 0
+            response = None
+            
+            while retry_count < max_retries:
+                try:
+                    if self.is_local_model:
+                        # Local model (synchronous)
+                        response = self.model.generate(full_context)
                     else:
-                        # Single model (backward compatibility)
-                        response = await asyncio.to_thread(
-                            self.model.generate_content,
-                            full_context
-                        )
-                    response = response.text
-            except Exception as e:
-                print(f"❌ Error getting LLM response: {e}")
-                response = f"Error: {str(e)}"
+                        # API model (async)
+                        if self.use_key_rotation:
+                            # Get fresh model with next API key for this iteration
+                            current_model = self.model.get_model(**self.model_config)
+                            response = await asyncio.to_thread(
+                                current_model.generate_content,
+                                full_context
+                            )
+                        else:
+                            # Single model (backward compatibility)
+                            response = await asyncio.to_thread(
+                                self.model.generate_content,
+                                full_context
+                            )
+                        response = response.text
+                    break  # Success, exit retry loop
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    retry_count += 1
+                    
+                    # Check if it's a quota/rate limit error
+                    if "429" in error_msg or "Quota exceeded" in error_msg or "RATE_LIMIT_EXCEEDED" in error_msg:
+                        if retry_count < max_retries:
+                            wait_time = 2 ** retry_count  # Exponential backoff: 2s, 4s, 8s
+                            print(f"⚠️  Quota limit hit, waiting {wait_time}s before retry {retry_count}/{max_retries}...")
+                            await asyncio.sleep(wait_time)
+                        else:
+                            print(f"❌ Quota exceeded after {max_retries} retries: {error_msg}")
+                            response = f"Error: Quota exceeded after retries"
+                    else:
+                        print(f"❌ Error getting LLM response: {error_msg}")
+                        response = f"Error: {error_msg}"
+                        break  # Non-quota error, don't retry
             
             scratchpad.append(f"Assistant: {response}")
             

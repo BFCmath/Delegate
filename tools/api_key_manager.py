@@ -25,10 +25,15 @@ class APIKeyManager:
             api_keys: List of API keys to rotate through
             cooldown_seconds: Time to wait before reusing a key (default: 60s)
         """
-        self.api_keys = api_keys
+        self.api_keys = []
+        for key in api_keys:
+            self.api_keys.append({
+                'key': key,
+                'usage_count': 0,
+                'last_used': 0
+            })
         self.cooldown_seconds = cooldown_seconds
         self.current_index = 0
-        self.key_last_used = {}  # Track when each key was last used
         self.total_keys = len(api_keys)
         
         if self.total_keys == 0:
@@ -36,29 +41,33 @@ class APIKeyManager:
         
         print(f"✓ API Key Manager initialized with {self.total_keys} keys")
     
-    def get_next_key(self) -> str:
+    def get_next_key(self) -> tuple:
         """
         Get the next available API key, waiting if necessary.
         
         Returns:
-            str: Next API key to use
+            tuple: (key_string, key_index) - the key to use and its index
         """
         attempts = 0
         max_attempts = self.total_keys * 2  # Avoid infinite loop
         
         while attempts < max_attempts:
-            key = self.api_keys[self.current_index]
-            last_used = self.key_last_used.get(self.current_index, 0)
+            key_info = self.api_keys[self.current_index]
+            last_used = key_info['last_used']
             time_since_use = time.time() - last_used
             
             # If this key has cooled down, use it
             if time_since_use >= self.cooldown_seconds:
-                self.key_last_used[self.current_index] = time.time()
+                key_info['last_used'] = time.time()
+                key_info['usage_count'] += 1
+                
+                # Store the index before incrementing
+                used_index = self.current_index
                 
                 # Move to next key for next call
                 self.current_index = (self.current_index + 1) % self.total_keys
                 
-                return key
+                return key_info['key'], used_index
             
             # Key still in cooldown, try next one
             self.current_index = (self.current_index + 1) % self.total_keys
@@ -71,13 +80,15 @@ class APIKeyManager:
                 time.sleep(wait_time)
         
         # Fallback: return current key even if in cooldown
-        return self.api_keys[self.current_index]
+        used_index = self.current_index
+        return self.api_keys[self.current_index]['key'], used_index
     
     def configure_next_key(self):
         """Configure genai with the next available API key."""
-        key = self.get_next_key()
+        key, used_index = self.get_next_key()
         genai.configure(api_key=key)
-        print(f"🔑 Using API key #{self.current_index + 1}/{self.total_keys}")
+        key_suffix = key[-8:] if len(key) >= 8 else key[-4:]
+        print(f"🔑 Using API key #{used_index + 1}/{self.total_keys} (***{key_suffix})")
     
     def get_model(self, model_name: str = "gemini-2.5-flash", **kwargs):
         """
@@ -90,7 +101,10 @@ class APIKeyManager:
         Returns:
             genai.GenerativeModel: Configured model instance
         """
-        self.configure_next_key()
+        key, used_index = self.get_next_key()
+        genai.configure(api_key=key)
+        key_suffix = key[-8:] if len(key) >= 8 else key[-4:]
+        print(f"🔑 Using API key #{used_index + 1}/{self.total_keys} (***{key_suffix})")
         return genai.GenerativeModel(model_name=model_name, **kwargs)
 
 

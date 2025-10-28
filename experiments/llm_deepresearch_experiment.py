@@ -171,5 +171,28 @@ async def run_llm_deepresearch_experiment(
     print(f"  Avg Iterations: {summary['avg_iterations']:.1f}")
     print(f"{'='*60}")
     
+    # Print key usage statistics
+    print(f"\n{'='*60}")
+    print("📊 API KEY USAGE STATISTICS")
+    print(f"{'='*60}")
+    total_calls = sum(key_info['usage_count'] for key_info in key_manager.api_keys)
+    for i, key_info in enumerate(key_manager.api_keys, 1):
+        key_suffix = key_info['key'][-8:] if len(key_info['key']) >= 8 else key_info['key'][-4:]
+        usage = key_info['usage_count']
+        percentage = (usage / total_calls * 100) if total_calls > 0 else 0
+        bar = "█" * min(int(percentage / 2), 50)  # Cap at 50 chars
+        print(f"KEY_{i} (***{key_suffix}): {usage:3d} calls {bar} ({percentage:.1f}%)")
+    print(f"\nTotal API calls: {total_calls}")
+    expected_per_key = total_calls / len(key_manager.api_keys) if len(key_manager.api_keys) > 0 else 0
+    print(f"Expected per key: {expected_per_key:.1f}")
+    max_deviation = max(abs(key_info['usage_count'] - expected_per_key) 
+                        for key_info in key_manager.api_keys) if key_manager.api_keys else 0
+    print(f"Max deviation: {max_deviation:.1f}")
+    if max_deviation <= 2:
+        print("✅ Keys are evenly distributed!")
+    else:
+        print("⚠️  Uneven distribution - some keys may have failed")
+    print(f"{'='*60}")
+    
     return summary
 

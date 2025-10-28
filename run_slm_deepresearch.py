@@ -19,6 +19,8 @@ async def main():
     parser.add_argument('--queries', type=int, default=10, help='Number of queries (default: 10)')
     parser.add_argument('--seed', type=int, default=123, help='Random seed')
     parser.add_argument('--max-iterations', type=int, default=10, help='Max search iterations per query')
+    parser.add_argument('--model', type=str, default='Qwen/Qwen3-4B-Instruct-2507',
+                        help='HuggingFace model ID')
     parser.add_argument('--input-file', type=str, help='Custom query JSONL file (optional)')
     parser.add_argument('--output', type=str, help='Output directory (default: auto-generated)')
     parser.add_argument('--language', type=str, default='en', choices=['en', 'zh'], help='Query language')
@@ -67,6 +69,7 @@ async def main():
         test_df.copy(),
         str(results_file),
         max_iterations=args.max_iterations,
+        model_id=args.model,
         debug_file=str(debug_file) if debug_file else None,
         fail_fast=fail_fast
     )

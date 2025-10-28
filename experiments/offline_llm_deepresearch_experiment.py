@@ -32,7 +32,9 @@ async def run_offline_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
     max_iterations: int = 10,
-    model_id: str = "Qwen/Qwen2.5-7B-Instruct"
+    model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+    debug_file: str = None,
+    fail_fast: bool = True
 ):
     """
     Run offline LLM deep research experiment with local Qwen base model + ReAct.
@@ -42,6 +44,8 @@ async def run_offline_llm_deepresearch_experiment(
         output_file: Path to save results (JSONL format)
         max_iterations: Max search iterations per query
         model_id: HuggingFace model ID
+        debug_file: Optional path to save debug info (full ReAct pipeline)
+        fail_fast: If True, stop immediately on first error. If False, continue with remaining queries.
         
     Returns:
         Summary dict with metrics
@@ -77,6 +81,12 @@ async def run_offline_llm_deepresearch_experiment(
     # Prepare output file
     with open(output_file, 'w') as f:
         pass  # Clear file
+    
+    # Prepare debug file if requested
+    if debug_file:
+        with open(debug_file, 'w') as f:
+            pass  # Clear file
+        print(f"🐛 Debug mode enabled - saving full ReAct traces to {debug_file}")
     
     # Track metrics
     total_time = 0.0
@@ -121,17 +131,51 @@ async def run_offline_llm_deepresearch_experiment(
             with open(output_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(output_record, ensure_ascii=False) + '\n')
             
+            # Save debug info if requested
+            if debug_file:
+                debug_record = {
+                    "id": int(row["id"]),
+                    "prompt": row["prompt"],
+                    "metadata": result.metadata,
+                    "react_pipeline": result.scratchpad,
+                    "article": result.article[:200] + "..." if len(result.article) > 200 else result.article
+                }
+                with open(debug_file, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps(debug_record, ensure_ascii=False, indent=2) + '\n')
+            
             print(f"✅ Completed in {latency:.2f}s | Searches: {result.metadata['search_count']} | Iterations: {result.metadata['iterations']}")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
-            error_record = {
-                "id": int(row["id"]),
-                "prompt": row["prompt"],
-                "article": f"ERROR: {str(e)}"
-            }
-            with open(output_file, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(error_record, ensure_ascii=False) + '\n')
+            error_type = type(e).__name__
+            error_msg = str(e)
+            
+            print(f"\n{'='*80}")
+            print(f"❌ EXPERIMENT FAILED ON QUERY {idx+1}/{len(test_df)}")
+            print(f"{'='*80}")
+            print(f"Query ID: {row['id']}")
+            print(f"Error Type: {error_type}")
+            print(f"Error Message: {error_msg}")
+            print(f"{'='*80}\n")
+            
+            if fail_fast:
+                print("⚠️  Fail-fast mode: Stopping experiment immediately.")
+                print(f"⚠️  {completed_count} queries completed successfully before failure.")
+                raise RuntimeError(
+                    f"Experiment stopped on query {idx+1}/{len(test_df)} (ID: {row['id']}). "
+                    f"Error: {error_msg}"
+                ) from e
+            else:
+                print("⚠️  Continuing with next query (fail_fast=False)...")
+                if debug_file:
+                    debug_error_record = {
+                        "id": int(row["id"]),
+                        "prompt": row["prompt"],
+                        "error": error_msg,
+                        "error_type": error_type,
+                        "react_pipeline": []
+                    }
+                    with open(debug_file, 'a', encoding='utf-8') as f:
+                        f.write(json.dumps(debug_error_record, ensure_ascii=False, indent=2) + '\n')
     
     # Calculate summary
     n_total = len(test_df)

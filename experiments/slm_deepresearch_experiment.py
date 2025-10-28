@@ -71,7 +71,7 @@ async def run_slm_deepresearch_experiment(
     model_wrapper = LocalModelWrapper(
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=4096  # Longer for research
+        max_new_tokens=32768  # Much longer for deep research articles
     )
     
     # Get search tool

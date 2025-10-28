@@ -14,7 +14,6 @@ WORKFLOW:
 
 ACTIONS:
 - Search[query]: Search the web for specific information
-  Example: Search[Japan population projections 2020-2050 elderly demographics]
   
 - RESEARCH_COMPLETE: Signal that research is done
   Use this when you have gathered enough information to answer the question
@@ -26,14 +25,7 @@ RULES:
 
 EXAMPLE:
 Thought: I need demographic data for Japan's elderly population.
-Action: Search[Japan elderly population statistics 2020-2050]
-
-[After receiving results...]
-
-Thought: I need economic data about elderly consumption.
-Action: Search[Japan elderly consumer spending market size]
-
-[After receiving results...]
+Action: Search[...]
 
 Thought: I have enough information about demographics and economics.
 Action: RESEARCH_COMPLETE

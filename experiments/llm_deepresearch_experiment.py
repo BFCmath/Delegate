@@ -62,7 +62,7 @@ async def run_llm_deepresearch_experiment(
     model_config = {
         "model_name": "gemini-2.5-flash",
         "generation_config": genai.types.GenerationConfig(
-            max_output_tokens=4096,  # Longer for research
+            max_output_tokens=32768,  # Much longer for deep research articles
             temperature=0.7  # Slightly creative for research
         )
     }

@@ -23,6 +23,7 @@ async def main():
     parser.add_argument('--output', type=str, help='Output directory (default: auto-generated)')
     parser.add_argument('--language', type=str, default='en', choices=['en', 'zh'], help='Query language')
     parser.add_argument('--debug', action='store_true', help='Save full ReAct pipeline (thoughts/actions/observations) for debugging')
+    parser.add_argument('--no-fail-fast', action='store_true', help='Continue with remaining queries on error (default: stop immediately)')
     args = parser.parse_args()
     
     # Create output directory
@@ -58,12 +59,14 @@ async def main():
     
     results_file = output_dir / "results.jsonl"
     debug_file = output_dir / "debug_pipeline.jsonl" if args.debug else None
+    fail_fast = not args.no_fail_fast  # Default True, unless --no-fail-fast is set
     
     summary = await run_llm_deepresearch_experiment(
         test_df.copy(),
         str(results_file),
         max_iterations=args.max_iterations,
-        debug_file=str(debug_file) if debug_file else None
+        debug_file=str(debug_file) if debug_file else None,
+        fail_fast=fail_fast
     )
     
     # Save summary

@@ -162,22 +162,49 @@ class ReActAgent:
                         if self.use_key_rotation:
                             # Get fresh model with next API key for this iteration
                             current_model = self.model.get_model(**self.model_config)
-                            response = await asyncio.to_thread(
+                            api_response = await asyncio.to_thread(
                                 current_model.generate_content,
                                 full_context
                             )
                         else:
                             # Single model (backward compatibility)
-                            response = await asyncio.to_thread(
+                            api_response = await asyncio.to_thread(
                                 self.model.generate_content,
                                 full_context
                             )
-                        response = response.text
+                        
+                        # Check if response is valid before accessing text
+                        if not api_response.candidates:
+                            raise ValueError("No candidates in response - model returned empty result")
+                        
+                        candidate = api_response.candidates[0]
+                        finish_reason = candidate.finish_reason
+                        
+                        # Check finish reason (0=UNSPECIFIED, 1=STOP, 2=MAX_TOKENS, 3=SAFETY, 4=RECITATION, 5=OTHER)
+                        if finish_reason == 3:  # SAFETY
+                            raise ValueError(f"Content blocked by safety filter (SAFETY). This query may violate content policies.")
+                        elif finish_reason == 4:  # RECITATION
+                            raise ValueError(f"Content blocked (RECITATION). Response contained copyrighted material.")
+                        elif finish_reason == 5:  # OTHER
+                            raise ValueError(f"Content generation failed (OTHER). Unknown blocking reason.")
+                        elif finish_reason not in [0, 1, 2]:  # Valid reasons are UNSPECIFIED, STOP, MAX_TOKENS
+                            raise ValueError(f"Invalid finish_reason: {finish_reason}")
+                        
+                        # Check if text is available
+                        if not api_response.parts:
+                            raise ValueError(f"No text parts in response. Finish reason: {finish_reason}")
+                        
+                        response = api_response.text
                     break  # Success, exit retry loop
                     
                 except Exception as e:
                     error_msg = str(e)
                     retry_count += 1
+                    
+                    # Check if it's a content filter/safety error (don't retry)
+                    if "safety filter" in error_msg.lower() or "content blocked" in error_msg.lower() or "SAFETY" in error_msg:
+                        print(f"❌ Content blocked by safety filter: {error_msg}")
+                        raise ValueError(f"Research phase failed - Content blocked: {error_msg}")
                     
                     # Check if it's a quota/rate limit error
                     if "429" in error_msg or "Quota exceeded" in error_msg or "RATE_LIMIT_EXCEEDED" in error_msg:
@@ -187,11 +214,10 @@ class ReActAgent:
                             await asyncio.sleep(wait_time)
                         else:
                             print(f"❌ Quota exceeded after {max_retries} retries: {error_msg}")
-                            response = f"Error: Quota exceeded after retries"
+                            raise RuntimeError(f"Research phase failed - Quota exceeded after {max_retries} retries")
                     else:
                         print(f"❌ Error getting LLM response: {error_msg}")
-                        response = f"Error: {error_msg}"
-                        break  # Non-quota error, don't retry
+                        raise RuntimeError(f"Research phase failed: {error_msg}")
             
             scratchpad.append(f"Assistant: {response}")
             
@@ -269,35 +295,64 @@ class ReActAgent:
                 else:
                     if self.use_key_rotation:
                         current_model = self.model.get_model(**self.model_config)
-                        response = await asyncio.to_thread(
+                        api_response = await asyncio.to_thread(
                             current_model.generate_content,
                             report_prompt
                         )
                     else:
-                        response = await asyncio.to_thread(
+                        api_response = await asyncio.to_thread(
                             self.model.generate_content,
                             report_prompt
                         )
-                    article = response.text
+                    
+                    # Check if response is valid before accessing text
+                    if not api_response.candidates:
+                        raise ValueError("No candidates in response - model returned empty result")
+                    
+                    candidate = api_response.candidates[0]
+                    finish_reason = candidate.finish_reason
+                    
+                    # Check finish reason
+                    if finish_reason == 3:  # SAFETY
+                        raise ValueError(f"Report generation blocked by safety filter. The synthesized content may violate policies.")
+                    elif finish_reason == 4:  # RECITATION
+                        raise ValueError(f"Report generation blocked (RECITATION). Content contained copyrighted material.")
+                    elif finish_reason == 5:  # OTHER
+                        raise ValueError(f"Report generation failed (OTHER). Unknown blocking reason.")
+                    elif finish_reason not in [0, 1, 2]:
+                        raise ValueError(f"Invalid finish_reason: {finish_reason}")
+                    
+                    # Check if text is available
+                    if not api_response.parts:
+                        raise ValueError(f"No text parts in response. Finish reason: {finish_reason}")
+                    
+                    article = api_response.text
                 break
                 
             except Exception as e:
                 error_msg = str(e)
                 retry_count += 1
                 
+                # Check if it's a content filter/safety error (don't retry, fail immediately)
+                if "safety filter" in error_msg.lower() or "content blocked" in error_msg.lower() or "SAFETY" in error_msg:
+                    print(f"❌ Report generation blocked by safety filter: {error_msg}")
+                    raise ValueError(f"Report generation failed - Content blocked: {error_msg}")
+                
+                # Check if it's a quota/rate limit error
                 if "429" in error_msg or "Quota exceeded" in error_msg:
                     if retry_count < max_retries:
                         wait_time = 2 ** retry_count
                         print(f"⚠️  Quota limit, waiting {wait_time}s before retry {retry_count}/{max_retries}...")
                         await asyncio.sleep(wait_time)
                     else:
-                        article = f"Error: Report generation failed after {max_retries} retries due to quota limits"
+                        print(f"❌ Report generation failed after {max_retries} retries due to quota limits")
+                        raise RuntimeError(f"Report generation failed - Quota exceeded after {max_retries} retries")
                 else:
-                    article = f"Error: Report generation failed - {error_msg}"
-                    break
+                    print(f"❌ Report generation error: {error_msg}")
+                    raise RuntimeError(f"Report generation failed: {error_msg}")
         
         if article is None:
-            article = "Error: Failed to generate report"
+            raise RuntimeError("Report generation failed - No article generated after all retries")
         
         print(f"✅ Report generated ({len(article)} chars)")
         

@@ -26,7 +26,8 @@ async def run_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
     max_iterations: int = 10,
-    debug_file: str = None
+    debug_file: str = None,
+    fail_fast: bool = True
 ):
     """
     Run LLM-only deep research experiment with Gemini + ReAct.
@@ -36,6 +37,7 @@ async def run_llm_deepresearch_experiment(
         output_file: Path to save results (JSONL format)
         max_iterations: Max search iterations per query
         debug_file: Optional path to save debug info (full ReAct pipeline)
+        fail_fast: If True, stop immediately on first error. If False, continue with remaining queries.
         
     Returns:
         Summary dict with metrics
@@ -127,26 +129,40 @@ async def run_llm_deepresearch_experiment(
             print(f"✅ Completed in {latency:.2f}s | Searches: {result.metadata['search_count']} | Iterations: {result.metadata['iterations']}")
             
         except Exception as e:
-            print(f"❌ Error: {e}")
-            # Save error record
-            error_record = {
-                "id": int(row["id"]),
-                "prompt": row["prompt"],
-                "article": f"ERROR: {str(e)}"
-            }
-            with open(output_file, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(error_record, ensure_ascii=False) + '\n')
+            error_type = type(e).__name__
+            error_msg = str(e)
             
-            # Save error to debug file too
-            if debug_file:
-                debug_error_record = {
-                    "id": int(row["id"]),
-                    "prompt": row["prompt"],
-                    "error": str(e),
-                    "react_pipeline": []
-                }
-                with open(debug_file, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps(debug_error_record, ensure_ascii=False, indent=2) + '\n')
+            print(f"\n{'='*80}")
+            print(f"❌ EXPERIMENT FAILED ON QUERY {idx+1}/{len(test_df)}")
+            print(f"{'='*80}")
+            print(f"Query ID: {row['id']}")
+            print(f"Error Type: {error_type}")
+            print(f"Error Message: {error_msg}")
+            print(f"{'='*80}\n")
+            
+            if fail_fast:
+                # Stop immediately - don't write error to output
+                print("⚠️  Fail-fast mode: Stopping experiment immediately.")
+                print(f"⚠️  {completed_count} queries completed successfully before failure.")
+                raise RuntimeError(
+                    f"Experiment stopped on query {idx+1}/{len(test_df)} (ID: {row['id']}). "
+                    f"Error: {error_msg}"
+                ) from e
+            else:
+                # Continue with next query (legacy behavior)
+                print("⚠️  Continuing with next query (fail_fast=False)...")
+                
+                # Save error record for debugging
+                if debug_file:
+                    debug_error_record = {
+                        "id": int(row["id"]),
+                        "prompt": row["prompt"],
+                        "error": error_msg,
+                        "error_type": error_type,
+                        "react_pipeline": []
+                    }
+                    with open(debug_file, 'a', encoding='utf-8') as f:
+                        f.write(json.dumps(debug_error_record, ensure_ascii=False, indent=2) + '\n')
     
     # Calculate summary
     n_total = len(test_df)

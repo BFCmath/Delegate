@@ -73,8 +73,17 @@ class ReActAgent:
         Returns:
             Dict with 'type' and 'content' keys
         """
-        # Check for research complete signal (new two-phase approach)
-        if "RESEARCH_COMPLETE" in response:
+        # PRIORITY: Check for research complete signal (new two-phase approach)
+        if ("RESEARCH_COMPLETE" in response or
+            "research complete" in response.lower() or
+            "Research complete" in response):
+            return {"type": "ResearchComplete"}
+
+        # Also check for completion indicators
+        response_lower = response.lower()
+        if (response_lower.startswith("research complete") or
+            "i have gathered sufficient information" in response_lower or
+            "sufficient data collected" in response_lower):
             return {"type": "ResearchComplete"}
         
         # Look for Search action
@@ -225,12 +234,22 @@ class ReActAgent:
                         raise RuntimeError(f"Research phase failed: {error_msg}")
             
             scratchpad.append(f"Assistant: {response}")
-            
+
             # Parse action
             action = self.parse_action(response)
-            
+
             if action["type"] == "ResearchComplete":
                 print(f"✅ Research complete after {iteration} iterations")
+                research_complete = True
+                break
+
+            # Additional check: if response indicates completion even without exact signal
+            response_lower = response.lower()
+            if ("have sufficient information" in response_lower or
+                "have enough data" in response_lower or
+                "research is complete" in response_lower or
+                "gathered enough information" in response_lower):
+                print(f"✅ Research complete detected (alternative phrasing) after {iteration} iterations")
                 research_complete = True
                 break
             

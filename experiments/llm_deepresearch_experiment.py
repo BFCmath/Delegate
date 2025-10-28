@@ -56,6 +56,18 @@ async def run_llm_deepresearch_experiment(
             pass  # Clear file
         print(f"🐛 Debug mode enabled - saving full ReAct traces to {debug_file}")
     
+    # Model configuration for key rotation (passed to agent)
+    model_config = {
+        "model_name": "gemini-2.5-flash",
+        "generation_config": genai.types.GenerationConfig(
+            max_output_tokens=4096,  # Longer for research
+            temperature=0.7  # Slightly creative for research
+        )
+    }
+    
+    print(f"🔄 API Key Rotation: Enabled (cycling keys per LLM call)")
+    print(f"📊 Available Keys: {len(key_manager.api_keys)}")
+    
     # Track metrics
     total_time = 0.0
     total_search_count = 0
@@ -67,21 +79,13 @@ async def run_llm_deepresearch_experiment(
         print(f"Prompt: {row['prompt'][:80]}...")
         
         try:
-            # Get model with API key rotation
-            model = key_manager.get_model(
-                model_name="gemini-2.5-flash",
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=4096,  # Longer for research
-                    temperature=0.7  # Slightly creative for research
-                )
-            )
-            
-            # Create agent
+            # Create agent with key_manager (cycles keys per iteration)
             agent = ReActAgent(
-                model=model,
+                model=key_manager,  # Pass key_manager instead of single model
                 search_tool=search_tool,
                 max_iterations=max_iterations,
-                is_local_model=False
+                is_local_model=False,
+                model_config=model_config  # Config for getting fresh models
             )
             
             # Run agent

@@ -26,24 +26,30 @@ class ReActAgent:
     
     def __init__(
         self,
-        model,  # Can be Gemini model or local model wrapper
+        model,  # Can be Gemini model, local model wrapper, or key_manager
         search_tool: Callable[[str], List[Dict]],
         max_iterations: int = 10,
-        is_local_model: bool = False
+        is_local_model: bool = False,
+        model_config: Dict = None  # For API models with key rotation
     ):
         """
         Initialize ReAct agent.
         
         Args:
-            model: LLM model (Gemini GenerativeModel or local model wrapper)
+            model: LLM model (Gemini GenerativeModel, local model wrapper, or APIKeyManager)
             search_tool: Function that takes query string and returns search results
             max_iterations: Maximum number of search iterations
             is_local_model: True if using local model (transformers), False for API
+            model_config: Config for API models (model_name, generation_config) for key rotation
         """
         self.model = model
         self.search_tool = search_tool
         self.max_iterations = max_iterations
         self.is_local_model = is_local_model
+        self.model_config = model_config or {}
+        
+        # Check if model is actually a key manager (for key rotation)
+        self.use_key_rotation = hasattr(model, 'get_model')
         
         # Import prompts
         import sys
@@ -143,10 +149,19 @@ class ReActAgent:
                     response = self.model.generate(full_context)
                 else:
                     # API model (async)
-                    response = await asyncio.to_thread(
-                        self.model.generate_content,
-                        full_context
-                    )
+                    if self.use_key_rotation:
+                        # Get fresh model with next API key for this iteration
+                        current_model = self.model.get_model(**self.model_config)
+                        response = await asyncio.to_thread(
+                            current_model.generate_content,
+                            full_context
+                        )
+                    else:
+                        # Single model (backward compatibility)
+                        response = await asyncio.to_thread(
+                            self.model.generate_content,
+                            full_context
+                        )
                     response = response.text
             except Exception as e:
                 print(f"❌ Error getting LLM response: {e}")

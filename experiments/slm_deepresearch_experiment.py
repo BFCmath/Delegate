@@ -1,6 +1,6 @@
 # experiments/slm_deepresearch_experiment.py
 """
-SLM Deep Research Experiment: Qwen 2.5 Math 1.5B with ReAct + Search
+SLM Deep Research Experiment: Qwen3 4B with vLLM + ReAct + Search
 """
 import os
 import time
@@ -8,9 +8,7 @@ import pandas as pd
 import asyncio
 import json
 import sys
-import torch
 from pathlib import Path
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -52,27 +50,18 @@ async def run_slm_deepresearch_experiment(
     """
     print(f"Running SLM ({model_id}) on {len(test_df)} queries")
     print(f"Max iterations: {max_iterations}")
-    
-    # Load model
-    print(f"\n📥 Loading model: {model_id}...")
-    device, dtype = _device_dtype()
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        device_map="auto" if device != "cpu" else None,
-        torch_dtype=dtype,
-        trust_remote_code=True
-    )
-    
-    print(f"✅ Model loaded on {device}")
-    
-    # Wrap model
+    print("🚀 Using vLLM for optimized inference")
+
+    # Initialize vLLM model wrapper
+    print(f"\n🚀 Initializing vLLM with model: {model_id}...")
     model_wrapper = LocalModelWrapper(
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=32768  # Much longer for deep research articles
+        model_name=model_id,
+        max_new_tokens=32768,  # Much longer for deep research articles
+        dtype="half"  # Use half precision for faster inference
     )
+
+    if not hasattr(model_wrapper, 'vllm_available') or not model_wrapper.vllm_available:
+        raise RuntimeError("vLLM initialization failed. Please install vLLM: pip install vllm")
     
     # Get search tool
     search_tool = get_search_tool()

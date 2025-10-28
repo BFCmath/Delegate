@@ -57,9 +57,10 @@ async def main():
     from experiments.offline_llm_deepresearch_experiment import run_offline_llm_deepresearch_experiment
     
     print("\n" + "="*80)
-    print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + ReAct + Search)")
+    print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + vLLM + ReAct + Search)")
     print("="*80)
     print("⚠️  Note: This will download the model (~8GB) if not cached")
+    print("🚀 Using vLLM for optimized inference")
     print("⚠️  GPU recommended for acceptable performance")
     
     results_file = output_dir / "results.jsonl"

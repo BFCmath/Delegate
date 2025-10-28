@@ -54,8 +54,9 @@ async def main():
     from experiments.slm_deepresearch_experiment import run_slm_deepresearch_experiment
     
     print("\n" + "="*80)
-    print("EXPERIMENT: SLM DEEP RESEARCH (Qwen 2.5 1.5B + ReAct + Search)")
+    print(f"EXPERIMENT: SLM DEEP RESEARCH ({args.model} + vLLM + ReAct + Search)")
     print("="*80)
+    print("🚀 Using vLLM for optimized inference")
     print("⚠️  GPU recommended for acceptable performance")
     
     results_file = output_dir / "results.jsonl"

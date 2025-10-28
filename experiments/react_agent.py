@@ -410,33 +410,52 @@ class ReActAgent:
 
 class LocalModelWrapper:
     """
-    Wrapper for local transformers models to provide consistent interface.
+    Wrapper for local models using vLLM for faster inference.
     """
-    
-    def __init__(self, model, tokenizer, max_new_tokens: int = 2048):
-        self.model = model
-        self.tokenizer = tokenizer
-        self.max_new_tokens = max_new_tokens
-    
-    def generate(self, prompt: str) -> str:
-        """Generate response from local model"""
-        import torch
-        
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        
-        with torch.inference_mode():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=False,
-                pad_token_id=self.tokenizer.eos_token_id
+
+    def __init__(self, model_name: str, max_new_tokens: int = 32768, dtype: str = "half"):
+        try:
+            from vllm import LLM, SamplingParams
+            self.vllm_available = True
+        except ImportError:
+            print("❌ vLLM not installed. Install with: pip install vllm")
+            self.vllm_available = False
+            return
+
+        print(f"🚀 Initializing vLLM with model: {model_name}")
+        try:
+            self.model = LLM(model=model_name, dtype=dtype)
+            self.tokenizer = self.model.get_tokenizer()  # vLLM provides tokenizer
+            self.max_new_tokens = max_new_tokens
+
+            # Default sampling parameters
+            self.sampling_params = SamplingParams(
+                temperature=0.7,
+                top_p=0.9,
+                max_tokens=max_new_tokens,
+                stop=["<|im_end|>", "<|endoftext|>", "</s>"]  # Common stop tokens
             )
-        
-        # Decode only the new tokens
-        response = self.tokenizer.decode(
-            outputs[0][inputs["input_ids"].shape[1]:],
-            skip_special_tokens=True
-        )
-        
-        return response
+
+            print(f"✅ vLLM model loaded successfully")
+        except Exception as e:
+            print(f"❌ Failed to load vLLM model: {e}")
+            self.vllm_available = False
+
+    def generate(self, prompt: str) -> str:
+        """Generate response from vLLM model"""
+        if not self.vllm_available:
+            return "Error: vLLM not available"
+
+        try:
+            # Generate using vLLM
+            outputs = self.model.generate([prompt], self.sampling_params)
+
+            # Extract the generated text
+            generated_text = outputs[0].outputs[0].text
+
+            return generated_text.strip()
+
+        except Exception as e:
+            print(f"❌ vLLM generation error: {e}")
+            return f"Error: vLLM generation failed - {str(e)}"
 

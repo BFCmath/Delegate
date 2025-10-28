@@ -4,6 +4,7 @@ transformers>=4.37.0
 google-generativeai>=0.3.0
 huggingface-hub>=0.20.0
 unsloth  # Optional: 2x faster inference + 4-bit quantization for Qwen models
+vllm>=0.4.0  # Required for fast inference in offline LLM and SLM experiments
 
 # Data Processing
 pandas>=2.0.0

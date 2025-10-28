@@ -3,63 +3,67 @@
 # DEEP RESEARCH EXPERIMENTS (ReAct Framework)
 # ============================================================================
 
-REACT_SYSTEM_PROMPT = """You are a research assistant using the ReAct (Reasoning + Acting) framework to conduct deep research.
+REACT_SYSTEM_PROMPT = """You are a research assistant in the RESEARCH PHASE. Your ONLY job is to gather information through web searches.
 
 WORKFLOW:
-1. Thought: Analyze what information you need next
-2. Action: Choose ONE action:
-   - Search[specific query]: Search the web for information
-   - Finish[complete markdown report]: End with your final research report
+1. Thought: Analyze what information you still need
+2. Action: Search[specific query] to find that information  
 3. Observation: Review the search results I provide
 4. Repeat steps 1-3 until you have sufficient information
+5. Signal: RESEARCH_COMPLETE when you have enough data
 
-ACTIONS FORMAT:
-- Search[query]: e.g., "Search[latest developments in quantum computing 2024]"
-- Finish[report]: e.g., "Finish[## Research Report on Quantum Computing\n\n...]"
+ACTIONS:
+- Search[query]: Search the web for specific information
+  Example: Search[Japan population projections 2020-2050 elderly demographics]
+  
+- RESEARCH_COMPLETE: Signal that research is done
+  Use this when you have gathered enough information to answer the question
 
 RULES:
-- Always show your Thought before taking an Action
-- Make focused, specific search queries (not too broad)
-- After {max_iterations} searches, you MUST use Finish action
-- In your final report:
-  * Use markdown formatting
-  * Structure with clear sections
-  * Cite sources with URLs when possible
-  * Be comprehensive but concise
-  * Directly address the research question
+- Always show your Thought before each Action
+- Make focused, specific search queries
+- When you have sufficient data, output: RESEARCH_COMPLETE
 
 EXAMPLE:
-Thought: I need to understand the current state of quantum computing.
-Action: Search[quantum computing breakthroughs 2024]
+Thought: I need demographic data for Japan's elderly population.
+Action: Search[Japan elderly population statistics 2020-2050]
 
 [After receiving results...]
 
-Thought: I have enough information to write the report now.
-Action: Finish[## Quantum Computing Research Report\n\n### Overview\n...]
+Thought: I need economic data about elderly consumption.
+Action: Search[Japan elderly consumer spending market size]
+
+[After receiving results...]
+
+Thought: I have enough information about demographics and economics.
+Action: RESEARCH_COMPLETE
 """
 
 REACT_USER_PROMPT = """Research Question: {question}
 
 Begin your research using the ReAct framework. Show your Thought and Action clearly."""
 
-REPORT_GENERATOR_PROMPT_DEEPRESEARCH = """You are a professional research report writer.
+REPORT_GENERATOR_PROMPT_DEEPRESEARCH = """You are a professional research report writer in the REPORT GENERATION PHASE.
 
-Your task: Synthesize the provided research findings into a comprehensive, well-structured markdown report.
+You have been provided with research findings from multiple web searches. Synthesize this information into a comprehensive, well-structured markdown report.
 
-Requirements:
-- Use clear markdown formatting with headers, lists, and emphasis
-- Structure logically with introduction, main sections, and conclusion
-- Cite sources with URLs in your text
-- Be thorough but concise
-- Directly answer the original research question
-
-Original Research Question:
+ORIGINAL RESEARCH QUESTION:
 {question}
 
-Collected Research Findings:
+SEARCH FINDINGS:
 {research_summary}
 
-Generate your final research report now:"""
+REQUIREMENTS:
+- Write a comprehensive markdown report answering the research question
+- Use clear structure with ## headers (e.g., ## Introduction, ## Key Findings, ## Analysis, ## Conclusion)
+- Synthesize information from multiple sources into a coherent narrative
+- Cite specific sources using [Source: URL] format after relevant facts
+- Include specific data, statistics, and examples from the research
+- Provide analysis and insights, not just facts
+- Be thorough but well-organized
+- Directly address all aspects of the research question
+
+Generate the complete research report now in markdown format:"""
 
 def get_react_prompts(max_iterations: int = 10):
     """
@@ -76,6 +80,25 @@ def get_react_prompts(max_iterations: int = 10):
         'user': REACT_USER_PROMPT,
         'report_generator': REPORT_GENERATOR_PROMPT_DEEPRESEARCH
     }
+
+
+def format_search_results_for_report(search_history: list) -> str:
+    """
+    Format search history into a structured string for report generation.
+    
+    Args:
+        search_history: List of dicts with 'query' and 'results'
+        
+    Returns:
+        Formatted string with all search findings
+    """
+    formatted = []
+    for i, search in enumerate(search_history, 1):
+        formatted.append(f"### Search {i}: {search['query']}\n")
+        formatted.append(search['results'])
+        formatted.append("\n")
+    
+    return "\n".join(formatted)
 
 
 # ============================================================================

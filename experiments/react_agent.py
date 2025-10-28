@@ -73,11 +73,9 @@ class ReActAgent:
         Returns:
             Dict with 'type' and 'content' keys
         """
-        # Look for Finish action first (can contain multiple brackets)
-        finish_match = re.search(r'Finish\[(.*)\]', response, re.DOTALL)
-        if finish_match:
-            content = finish_match.group(1).strip()
-            return {"type": "Finish", "content": content}
+        # Check for research complete signal (new two-phase approach)
+        if "RESEARCH_COMPLETE" in response:
+            return {"type": "ResearchComplete"}
         
         # Look for Search action
         search_match = re.search(r'Search\[(.*?)\]', response)
@@ -113,7 +111,9 @@ class ReActAgent:
     
     async def run(self, question: str) -> ReActResult:
         """
-        Run ReAct loop for given research question.
+        Run two-phase ReAct pipeline:
+        Phase 1: Research (gather information via searches)
+        Phase 2: Report Generation (synthesize into article)
         
         Args:
             question: Research question to investigate
@@ -123,9 +123,14 @@ class ReActAgent:
         """
         print(f"🤖 Starting ReAct agent for: {question[:80]}...")
         
+        # ========== PHASE 1: RESEARCH ==========
+        print("📚 Phase 1: Research (gathering information)")
+        
         scratchpad = []
+        search_history = []  # Track all searches for report generation
         search_count = 0
         iteration = 0
+        research_complete = False
         
         # Initialize with system prompt and question
         system_prompt = self.prompts['system']
@@ -135,7 +140,7 @@ class ReActAgent:
         scratchpad.append(f"System: {system_prompt}")
         scratchpad.append(f"User: {user_prompt}")
         
-        while iteration < self.max_iterations:
+        while iteration < self.max_iterations and not research_complete:
             iteration += 1
             print(f"  Iteration {iteration}/{self.max_iterations}...")
             
@@ -193,17 +198,10 @@ class ReActAgent:
             # Parse action
             action = self.parse_action(response)
             
-            if action["type"] == "Finish":
-                print(f"✅ ReAct completed after {iteration} iterations")
-                return ReActResult(
-                    article=action["content"],
-                    metadata={
-                        "search_count": search_count,
-                        "iterations": iteration,
-                        "completed": True
-                    },
-                    scratchpad=scratchpad
-                )
+            if action["type"] == "ResearchComplete":
+                print(f"✅ Research complete after {iteration} iterations")
+                research_complete = True
+                break
             
             elif action["type"] == "Search":
                 search_count += 1
@@ -214,6 +212,13 @@ class ReActAgent:
                 try:
                     results = self.search_tool(query)
                     observation = self.format_observation(results)
+                    
+                    # Store search for report generation
+                    search_history.append({
+                        "query": query,
+                        "results": observation
+                    })
+                    
                 except Exception as e:
                     print(f"    ⚠️  Search error: {e}")
                     observation = f"Observation: Search failed - {str(e)}"
@@ -224,19 +229,100 @@ class ReActAgent:
                 # Continue - just a thought, keep going
                 pass
         
-        # Max iterations reached without Finish
-        print(f"⚠️  Max iterations reached without Finish action")
+        # ========== PHASE 2: REPORT GENERATION ==========
+        print("📝 Phase 2: Report Generation (synthesizing findings)")
         
-        # Try to extract final report from scratchpad
-        final_content = "\n\n".join(scratchpad)
+        if search_count == 0:
+            # No searches performed, return empty
+            print("⚠️  No searches performed during research phase")
+            return ReActResult(
+                article="No research was conducted.",
+                metadata={
+                    "search_count": 0,
+                    "iterations": iteration,
+                    "completed": False,
+                    "reason": "no_searches"
+                },
+                scratchpad=scratchpad
+            )
+        
+        # Format search findings for report generator
+        from prompts import format_search_results_for_report
+        search_summary = format_search_results_for_report(search_history)
+        
+        # Create report generation prompt
+        report_prompt = self.prompts['report_generator'].format(
+            question=question,
+            research_summary=search_summary
+        )
+        
+        # Get report from model
+        print("  Generating final report...")
+        max_retries = 3
+        retry_count = 0
+        article = None
+        
+        while retry_count < max_retries and article is None:
+            try:
+                if self.is_local_model:
+                    article = self.model.generate(report_prompt)
+                else:
+                    if self.use_key_rotation:
+                        current_model = self.model.get_model(**self.model_config)
+                        response = await asyncio.to_thread(
+                            current_model.generate_content,
+                            report_prompt
+                        )
+                    else:
+                        response = await asyncio.to_thread(
+                            self.model.generate_content,
+                            report_prompt
+                        )
+                    article = response.text
+                break
+                
+            except Exception as e:
+                error_msg = str(e)
+                retry_count += 1
+                
+                if "429" in error_msg or "Quota exceeded" in error_msg:
+                    if retry_count < max_retries:
+                        wait_time = 2 ** retry_count
+                        print(f"⚠️  Quota limit, waiting {wait_time}s before retry {retry_count}/{max_retries}...")
+                        await asyncio.sleep(wait_time)
+                    else:
+                        article = f"Error: Report generation failed after {max_retries} retries due to quota limits"
+                else:
+                    article = f"Error: Report generation failed - {error_msg}"
+                    break
+        
+        if article is None:
+            article = "Error: Failed to generate report"
+        
+        print(f"✅ Report generated ({len(article)} chars)")
+        
+        # Add report generation to scratchpad for debugging
+        scratchpad.append(f"\n=== PHASE 2: REPORT GENERATION ===")
+        scratchpad.append(f"Report Prompt: {report_prompt[:500]}...")
+        scratchpad.append(f"Generated Article: {article[:500]}...")
         
         return ReActResult(
-            article=final_content,
+            article=article,
             metadata={
                 "search_count": search_count,
                 "iterations": iteration,
-                "completed": False,
-                "reason": "max_iterations_reached"
+                "completed": research_complete or iteration >= self.max_iterations,
+                "phases": {
+                    "research": {
+                        "iterations": iteration,
+                        "searches": search_count,
+                        "completed": research_complete
+                    },
+                    "report": {
+                        "generated": True,
+                        "length": len(article)
+                    }
+                }
             },
             scratchpad=scratchpad
         )

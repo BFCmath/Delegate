@@ -228,7 +228,7 @@ if __name__ == "__main__":
     manager = APIKeyManager(keys, cooldown_seconds=1)
     
     # Get a model
-    model = manager.get_model("gemini-2.5-flash-lite")
+    model = manager.get_model("gemini-2.5-flash")
     
     # Example 2: Load from environment
     manager = create_key_manager()

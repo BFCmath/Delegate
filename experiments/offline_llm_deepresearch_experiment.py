@@ -1,6 +1,6 @@
 # experiments/offline_llm_deepresearch_experiment.py
 """
-Offline LLM Deep Research Experiment: Qwen 2.5 Math 7B with ReAct + Search
+Offline LLM Deep Research Experiment: Qwen3 4B GGUF with ReAct + Search
 """
 import os
 import time
@@ -8,71 +8,126 @@ import pandas as pd
 import asyncio
 import json
 import sys
-import torch
 from pathlib import Path
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments.react_agent import ReActAgent, LocalModelWrapper
+from experiments.react_agent import ReActAgent
 from tools.search_tool import get_search_tool
 
+# Import llama-cpp-python for GGUF models
+try:
+    from llama_cpp import Llama
+    LLAMA_CPP_AVAILABLE = True
+except ImportError:
+    print("❌ llama-cpp-python not installed. Install with: pip install llama-cpp-python")
+    LLAMA_CPP_AVAILABLE = False
 
-def _device_dtype():
-    """Determine best device and dtype"""
-    if torch.cuda.is_available():
-        return "cuda", torch.float16
-    elif torch.backends.mps.is_available():
-        return "mps", torch.float32
-    return "cpu", torch.float32
+
+class GGUFModelWrapper:
+    """
+    Wrapper for GGUF models using llama-cpp-python.
+    """
+
+    def __init__(self, model_path: str, max_new_tokens: int = 16384, n_ctx: int = 32768):
+        if not LLAMA_CPP_AVAILABLE:
+            raise ImportError("llama-cpp-python is required for GGUF models. Install with: pip install llama-cpp-python")
+
+        print(f"📥 Loading GGUF model: {model_path}")
+        self.model = Llama(
+            model_path=model_path,
+            n_ctx=n_ctx,  # Context window
+            n_threads=-1,  # Use all available threads
+            verbose=False
+        )
+        self.max_new_tokens = max_new_tokens
+        print(f"✅ GGUF model loaded (context: {n_ctx}, max output: {max_new_tokens})")
+
+    def generate(self, prompt: str) -> str:
+        """Generate response from GGUF model"""
+        try:
+            response = self.model(
+                prompt,
+                max_tokens=self.max_new_tokens,
+                temperature=0.7,
+                top_p=0.9,
+                stop=["<|im_end|>", "<|endoftext|>", "</s>"],  # Common stop tokens
+                echo=False
+            )
+            return response["choices"][0]["text"].strip()
+        except Exception as e:
+            print(f"❌ GGUF generation error: {e}")
+            return f"Error: GGUF generation failed - {str(e)}"
 
 
 async def run_offline_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
     max_iterations: int = 10,
-    model_id: str = "Qwen/Qwen2.5-7B-Instruct",
+    model_id: str = "unsloth/Qwen3-4B-Instruct-2507-GGUF",
     debug_file: str = None,
     fail_fast: bool = True
 ):
     """
-    Run offline LLM deep research experiment with local Qwen base model + ReAct.
-    
+    Run offline LLM deep research experiment with GGUF Qwen model + ReAct.
+
     Args:
         test_df: DataFrame with columns: id, prompt
         output_file: Path to save results (JSONL format)
         max_iterations: Max search iterations per query
-        model_id: HuggingFace model ID
+        model_id: GGUF model path or HuggingFace model ID
         debug_file: Optional path to save debug info (full ReAct pipeline)
         fail_fast: If True, stop immediately on first error. If False, continue with remaining queries.
-        
+
     Returns:
         Summary dict with metrics
     """
     print(f"Running Offline LLM ({model_id}) on {len(test_df)} queries")
     print(f"Max iterations: {max_iterations}")
-    print("⚠️  This will download the model (~14GB) if not cached")
-    
-    # Load model
-    print(f"\n📥 Loading model: {model_id}...")
-    device, dtype = _device_dtype()
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        device_map="auto" if device != "cpu" else None,
-        torch_dtype=dtype,
-        trust_remote_code=True
-    )
-    
-    print(f"✅ Model loaded on {device}")
-    
-    # Wrap model
-    model_wrapper = LocalModelWrapper(
-        model=model,
-        tokenizer=tokenizer,
-        max_new_tokens=32768  # Much longer for deep research articles
+
+    if not LLAMA_CPP_AVAILABLE:
+        raise ImportError("llama-cpp-python is required. Install with: pip install llama-cpp-python")
+
+    # Handle GGUF model path
+    if model_id.endswith('.gguf'):
+        # Direct path to GGUF file
+        model_path = model_id
+    else:
+        # Assume it's a HuggingFace model ID - download and find GGUF
+        from huggingface_hub import hf_hub_download
+        import os
+
+        print(f"📥 Downloading GGUF model: {model_id}...")
+
+        # Try to find the GGUF file
+        try:
+            # First try to find any .gguf file in the repo
+            model_path = hf_hub_download(
+                repo_id=model_id,
+                filename="*.gguf",
+                cache_dir=os.path.expanduser("~/.cache/huggingface")
+            )
+        except Exception:
+            # If no specific GGUF found, try the default name
+            try:
+                model_path = hf_hub_download(
+                    repo_id=model_id,
+                    filename="model.gguf",
+                    cache_dir=os.path.expanduser("~/.cache/huggingface")
+                )
+            except Exception as e:
+                print(f"❌ Could not find GGUF file for {model_id}")
+                print("Make sure the model repo contains a .gguf file")
+                raise e
+
+    print(f"📁 Using GGUF file: {model_path}")
+
+    # Load GGUF model
+    model_wrapper = GGUFModelWrapper(
+        model_path=model_path,
+        max_new_tokens=32768,  # Much longer for deep research articles
+        n_ctx=32768  # Context window
     )
     
     # Get search tool

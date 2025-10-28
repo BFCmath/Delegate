@@ -19,8 +19,8 @@ async def main():
     parser.add_argument('--queries', type=int, default=10, help='Number of queries (default: 10)')
     parser.add_argument('--seed', type=int, default=123, help='Random seed')
     parser.add_argument('--max-iterations', type=int, default=10, help='Max search iterations per query')
-    parser.add_argument('--model', type=str, default='Qwen/Qwen2.5-7B-Instruct', 
-                        help='Model ID from HuggingFace')
+    parser.add_argument('--model', type=str, default='unsloth/Qwen3-4B-Instruct-2507-GGUF',
+                        help='GGUF model ID from HuggingFace or local path')
     parser.add_argument('--input-file', type=str, help='Custom query JSONL file (optional)')
     parser.add_argument('--output', type=str, help='Output directory (default: auto-generated)')
     parser.add_argument('--language', type=str, default='en', choices=['en', 'zh'], help='Query language')
@@ -59,8 +59,9 @@ async def main():
     print("\n" + "="*80)
     print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + ReAct + Search)")
     print("="*80)
-    print("⚠️  Note: This will download the model (~14GB) if not cached")
-    print("⚠️  GPU recommended for acceptable performance")
+    print("⚠️  Note: This will download the GGUF model (~8GB) if not cached")
+    print("⚠️  llama-cpp-python required: pip install llama-cpp-python")
+    print("⚠️  CPU/GPU compatible (GGUF models are optimized)")
     
     results_file = output_dir / "results.jsonl"
     debug_file = output_dir / "debug_pipeline.jsonl" if args.debug else None

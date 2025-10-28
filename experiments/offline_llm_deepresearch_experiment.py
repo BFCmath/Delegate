@@ -19,6 +19,15 @@ from experiments.react_agent import ReActAgent, LocalModelWrapper
 from tools.search_tool import get_search_tool
 
 
+def _device_dtype():
+    """Determine best device and dtype"""
+    if torch.cuda.is_available():
+        return "cuda", torch.float16
+    elif torch.backends.mps.is_available():
+        return "mps", torch.float32
+    return "cpu", torch.float32
+
+
 async def run_offline_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,

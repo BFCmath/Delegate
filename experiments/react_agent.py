@@ -424,7 +424,8 @@ class LocalModelWrapper:
 
         print(f"🚀 Initializing vLLM with model: {model_name}")
         try:
-            self.model = LLM(model=model_name, dtype=dtype)
+            # Set context window to 8192 tokens (sufficient for research tasks)
+            self.model = LLM(model=model_name, dtype=dtype, max_model_len=8192)
             self.tokenizer = self.model.get_tokenizer()  # vLLM provides tokenizer
             self.max_new_tokens = max_new_tokens
 
@@ -436,7 +437,7 @@ class LocalModelWrapper:
                 stop=["<|im_end|>", "<|endoftext|>", "</s>"]  # Common stop tokens
             )
 
-            print(f"✅ vLLM model loaded successfully")
+            print(f"✅ vLLM model loaded successfully (context: 8192 tokens)")
         except Exception as e:
             print(f"❌ Failed to load vLLM model: {e}")
             self.vllm_available = False

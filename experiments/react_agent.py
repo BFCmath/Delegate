@@ -191,10 +191,15 @@ class ReActAgent:
                             raise ValueError(f"Invalid finish_reason: {finish_reason}")
                         
                         # Check if text is available
-                        if not api_response.parts:
-                            raise ValueError(f"No text parts in response. Finish reason: {finish_reason}")
-                        
-                        response = api_response.text
+                        if not candidate.content or not candidate.content.parts:
+                            # Empty response with STOP - treat as empty thought, continue
+                            if finish_reason == 1:  # STOP with no content
+                                print(f"    ⚠️  Empty response (STOP with no content) - continuing...")
+                                response = ""  # Empty response, will be treated as Continue
+                            else:
+                                raise ValueError(f"No text parts in response. Finish reason: {finish_reason}")
+                        else:
+                            response = api_response.text
                     break  # Success, exit retry loop
                     
                 except Exception as e:
@@ -323,8 +328,9 @@ class ReActAgent:
                         raise ValueError(f"Invalid finish_reason: {finish_reason}")
                     
                     # Check if text is available
-                    if not api_response.parts:
-                        raise ValueError(f"No text parts in response. Finish reason: {finish_reason}")
+                    if not candidate.content or not candidate.content.parts:
+                        # Empty response - this shouldn't happen for report generation
+                        raise ValueError(f"No text content in report generation response. Finish reason: {finish_reason}")
                     
                     article = api_response.text
                 break

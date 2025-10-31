@@ -16,7 +16,10 @@ Your specific search query here. Use an empty search tag when you have gathered 
 
 IMPORTANT RULES:
 - Always use both <thinking> and <search> tags in your response
-- When you have enough comprehensive information to answer the research question, use an empty <search></search> tag"""
+- When you have enough comprehensive information to answer the research question, use an empty <search></search> tag
+
+Example:
+<thinking>after analyzing A, I know B, so I need to find more about C</thinking><search>C</search>"""
 
 REACT_SYSTEM_PROMPT_BU1 = """You are a research assistant in the RESEARCH PHASE. Your task is to gather comprehensive information through web searches to answer research questions.
 

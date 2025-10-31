@@ -29,7 +29,7 @@ def _device_dtype():
 async def run_slm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
-    max_iterations: int = 10,
+    max_iterations: int = 3,
     model_id: str = "Qwen/Qwen2.5-1.5B-Instruct",
     quantization: QuantizationConfig = None,
     debug_file: str = None,

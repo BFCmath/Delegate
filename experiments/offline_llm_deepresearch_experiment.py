@@ -29,7 +29,7 @@ def _device_dtype():
 async def run_offline_llm_deepresearch_experiment(
     test_df: pd.DataFrame,
     output_file: str,
-    max_iterations: int = 10,
+    max_iterations: int = 3,
     model_id: str = "Qwen/Qwen3-4B-Instruct-2507",
     quantization: QuantizationConfig = None,
     debug_file: str = None,

@@ -13,7 +13,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from experiments.react_agent import ReActAgent, LocalModelWrapper
+from experiments.react_agent import ReActAgent, QuantizationConfig, LocalModelWrapper
 from tools.search_tool import get_search_tool
 
 
@@ -31,20 +31,22 @@ async def run_slm_deepresearch_experiment(
     output_file: str,
     max_iterations: int = 10,
     model_id: str = "Qwen/Qwen2.5-1.5B-Instruct",
+    quantization: QuantizationConfig = None,
     debug_file: str = None,
     fail_fast: bool = True
 ):
     """
     Run SLM deep research experiment with local Qwen 1.5B base model + ReAct.
-    
+
     Args:
         test_df: DataFrame with columns: id, prompt
         output_file: Path to save results (JSONL format)
         max_iterations: Max search iterations per query
         model_id: HuggingFace model ID
+        quantization: Quantization configuration (default: no quantization)
         debug_file: Optional path to save debug info (full ReAct pipeline)
         fail_fast: If True, stop immediately on first error. If False, continue with remaining queries.
-        
+
     Returns:
         Summary dict with metrics
     """
@@ -52,16 +54,19 @@ async def run_slm_deepresearch_experiment(
     print(f"Max iterations: {max_iterations}")
     print("🚀 Using vLLM for optimized inference")
 
-    # Initialize vLLM model wrapper
-    print(f"\n🚀 Initializing vLLM with model: {model_id}...")
+    # Initialize model wrapper with quantization
+    print(f"\n🚀 Initializing model: {model_id}...")
+    if quantization and quantization.method != "none":
+        print(f"📊 Using quantization: {quantization}")
+
     model_wrapper = LocalModelWrapper(
         model_name=model_id,
         max_new_tokens=4096,  # Much longer for deep research articles
-        dtype="half"  # Use half precision for faster inference
+        quantization=quantization  # Quantization configuration
     )
 
-    if not hasattr(model_wrapper, 'vllm_available') or not model_wrapper.vllm_available:
-        raise RuntimeError("vLLM initialization failed. Please install vLLM: pip install vllm")
+    if not hasattr(model_wrapper, 'available') or not model_wrapper.available:
+        raise RuntimeError(f"Model initialization failed for {model_id}. Check logs above for details.")
     
     # Get search tool
     search_tool = get_search_tool()

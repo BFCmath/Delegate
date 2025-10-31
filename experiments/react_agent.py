@@ -432,55 +432,254 @@ class ReActAgent:
         )
 
 
-class LocalModelWrapper:
+class QuantizationConfig:
     """
-    Wrapper for local models using vLLM for faster inference.
+    Configuration class for different quantization methods.
     """
 
-    def __init__(self, model_name: str, max_new_tokens: int = 4096, dtype: str = "half"):
+    SUPPORTED_METHODS = ["awq", "gptq", "bnb_4bit", "bnb_8bit", "none"]
+
+    def __init__(self, method: str = "none", **kwargs):
+        """
+        Initialize quantization configuration.
+
+        Args:
+            method: Quantization method ("awq", "gptq", "bnb_4bit", "bnb_8bit", "none")
+            **kwargs: Additional method-specific parameters
+        """
+        if method not in self.SUPPORTED_METHODS:
+            raise ValueError(f"Unsupported quantization method: {method}. "
+                           f"Supported: {self.SUPPORTED_METHODS}")
+
+        self.method = method
+        self.kwargs = kwargs
+
+        # Set default parameters based on method
+        if method == "awq":
+            self.kwargs.setdefault("quantization", "awq")
+        elif method == "gptq":
+            self.kwargs.setdefault("quantization", "gptq")
+        elif method == "bnb_4bit":
+            self.kwargs.setdefault("load_in_4bit", True)
+            self.kwargs.setdefault("bnb_4bit_compute_dtype", "float16")
+            self.kwargs.setdefault("bnb_4bit_use_double_quant", True)
+        elif method == "bnb_8bit":
+            self.kwargs.setdefault("load_in_8bit", True)
+
+    def get_vllm_params(self):
+        """Get parameters for vLLM initialization"""
+        if self.method in ["awq", "gptq"]:
+            return {"quantization": self.method, **self.kwargs}
+        return {}
+
+    def get_transformers_params(self):
+        """Get parameters for transformers initialization"""
+        if self.method.startswith("bnb"):
+            return self.kwargs
+        return {}
+
+    def __str__(self):
+        return f"QuantizationConfig(method={self.method}, kwargs={self.kwargs})"
+
+
+class LocalModelWrapper:
+    """
+    Wrapper for local models with quantization support.
+    Supports vLLM (AWQ/GPTQ) and transformers (BitsAndBytes) backends.
+    """
+
+    def __init__(self, model_name: str, max_new_tokens: int = 4096, quantization: QuantizationConfig = None):
+        # Set default quantization config
+        if quantization is None:
+            quantization = QuantizationConfig("none")
+
+        self.quantization = quantization
+        self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+
+        print(f"🚀 Initializing model: {model_name}")
+        print(f"📊 Quantization: {quantization}")
+
+        # Try vLLM first (supports AWQ/GPTQ quantization)
+        if quantization.method in ["awq", "gptq", "none"]:
+            success = self._init_vllm()
+            if success:
+                self.backend = "vllm"
+                return
+
+        # Fall back to transformers (supports BitsAndBytes quantization)
+        if quantization.method.startswith("bnb") or not self.vllm_available:
+            success = self._init_transformers()
+            if success:
+                self.backend = "transformers"
+                return
+
+        # If both fail, disable model
+        print("❌ Failed to initialize model with any backend")
+        self.available = False
+
+    def _init_vllm(self):
+        """Initialize with vLLM backend"""
         try:
             from vllm import LLM, SamplingParams
             self.vllm_available = True
         except ImportError:
-            print("❌ vLLM not installed. Install with: pip install vllm")
+            print("⚠️ vLLM not available, trying transformers fallback")
             self.vllm_available = False
-            return
+            return False
 
-        print(f"🚀 Initializing vLLM with model: {model_name}")
         try:
-            # Set context window to 8192 tokens (sufficient for research tasks)
-            self.model = LLM(model=model_name, dtype=dtype, max_model_len=8192)
-            self.tokenizer = self.model.get_tokenizer()  # vLLM provides tokenizer
-            self.max_new_tokens = max_new_tokens
+            # Get vLLM parameters including quantization
+            vllm_params = self.quantization.get_vllm_params()
+            vllm_params.update({
+                "model": self.model_name,
+                "max_model_len": 8192,  # Context window
+                "dtype": "half" if self.quantization.method == "none" else "auto"
+            })
 
-            # Default sampling parameters
+            print(f"🔧 vLLM params: {vllm_params}")
+            self.model = LLM(**vllm_params)
+
+            self.tokenizer = self.model.get_tokenizer()
+
+            # Sampling parameters
             self.sampling_params = SamplingParams(
                 temperature=0.7,
                 top_p=0.9,
-                max_tokens=max_new_tokens,
-                stop=["<|im_end|>", "<|endoftext|>", "</s>"]  # Common stop tokens
+                max_tokens=self.max_new_tokens,
+                stop=["<|im_end|>", "<|endoftext|>", "</s>"]
             )
 
-            print(f"✅ vLLM model loaded successfully (context: 8192 tokens)")
+            memory_info = self._get_memory_info()
+            print(f"✅ vLLM model loaded successfully (context: 8192 tokens, {memory_info})")
+            self.available = True
+            return True
+
         except Exception as e:
             print(f"❌ Failed to load vLLM model: {e}")
             self.vllm_available = False
+            return False
 
-    def generate(self, prompt: str) -> str:
-        """Generate response from vLLM model"""
-        if not self.vllm_available:
-            return "Error: vLLM not available"
+    def _init_transformers(self):
+        """Initialize with transformers backend (BitsAndBytes fallback)"""
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+            self.transformers_available = True
+        except ImportError:
+            print("❌ Transformers not available")
+            self.transformers_available = False
+            return False
 
         try:
-            # Generate using vLLM
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"🔧 Loading transformers model on {device}")
+
+            # Get quantization parameters
+            quant_params = self.quantization.get_transformers_params()
+
+            if quant_params:
+                # Configure BitsAndBytes
+                bnb_config = BitsAndBytesConfig(**quant_params)
+                print(f"🔧 BitsAndBytes config: {quant_params}")
+
+                model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    quantization_config=bnb_config,
+                    device_map="auto",
+                    trust_remote_code=True
+                )
+            else:
+                # Load without quantization
+                model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                    device_map="auto" if device == "cuda" else None,
+                    trust_remote_code=True
+                )
+
+            tokenizer = AutoTokenizer.from_pretrained(self.model_name, trust_remote_code=True)
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
+
+            self.model = model
+            self.tokenizer = tokenizer
+            self.device = device
+
+            memory_info = self._get_memory_info()
+            print(f"✅ Transformers model loaded successfully ({memory_info})")
+            self.available = True
+            return True
+
+        except Exception as e:
+            print(f"❌ Failed to load transformers model: {e}")
+            self.transformers_available = False
+            return False
+
+    def _get_memory_info(self):
+        """Get memory usage information"""
+        try:
+            import torch
+            if torch.cuda.is_available():
+                memory_allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+                memory_reserved = torch.cuda.memory_reserved() / 1024**3   # GB
+                return ".1f"
+            return "CPU mode"
+        except:
+            return "unknown"
+
+    def generate(self, prompt: str) -> str:
+        """Generate response using the appropriate backend"""
+        if not hasattr(self, 'available') or not self.available:
+            return "Error: Model not available"
+
+        if self.backend == "vllm":
+            return self._generate_vllm(prompt)
+        elif self.backend == "transformers":
+            return self._generate_transformers(prompt)
+        else:
+            return "Error: Unknown backend"
+
+    def _generate_vllm(self, prompt: str) -> str:
+        """Generate using vLLM backend"""
+        try:
             outputs = self.model.generate([prompt], self.sampling_params)
-
-            # Extract the generated text
             generated_text = outputs[0].outputs[0].text
-
             return generated_text.strip()
-
         except Exception as e:
             print(f"❌ vLLM generation error: {e}")
             return f"Error: vLLM generation failed - {str(e)}"
+
+    def _generate_transformers(self, prompt: str) -> str:
+        """Generate using transformers backend"""
+        try:
+            import torch
+
+            inputs = self.tokenizer(prompt, return_tensors="pt")
+            if self.device == "cuda":
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=self.max_new_tokens,
+                    temperature=0.7,
+                    top_p=0.9,
+                    do_sample=True,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    stop_strings=["<|im_end|>", "<|endoftext|>", "</s>"],
+                )
+
+            # Decode and clean response
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # Remove the input prompt from the response
+            if generated_text.startswith(prompt):
+                generated_text = generated_text[len(prompt):].strip()
+
+            return generated_text
+
+        except Exception as e:
+            print(f"❌ Transformers generation error: {e}")
+            return f"Error: Transformers generation failed - {str(e)}"
 

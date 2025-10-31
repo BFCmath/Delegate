@@ -6,6 +6,12 @@ huggingface-hub>=0.20.0
 unsloth  # Optional: 2x faster inference + 4-bit quantization for Qwen models
 vllm>=0.4.0  # Required for fast inference in offline LLM and SLM experiments
 
+# Quantization Libraries
+bitsandbytes>=0.43.0  # Required for 4-bit/8-bit quantization (BitsAndBytes)
+auto-gptq>=0.7.0  # Required for GPTQ quantization
+autoawq>=0.2.0  # Required for AWQ quantization
+accelerate>=0.25.0  # Required for BitsAndBytes integration
+
 # Data Processing
 pandas>=2.0.0
 datasets>=4.0.0

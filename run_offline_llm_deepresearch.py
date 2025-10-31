@@ -21,6 +21,9 @@ async def main():
     parser.add_argument('--max-iterations', type=int, default=10, help='Max search iterations per query')
     parser.add_argument('--model', type=str, default='Qwen/Qwen3-4B-Instruct-2507',
                         help='HuggingFace model ID')
+    parser.add_argument('--quantization', type=str, default='none',
+                        choices=['none', 'awq', 'gptq', 'bnb_4bit', 'bnb_8bit'],
+                        help='Quantization method to reduce GPU memory usage')
     parser.add_argument('--input-file', type=str, help='Custom query JSONL file (optional)')
     parser.add_argument('--output', type=str, help='Output directory (default: auto-generated)')
     parser.add_argument('--language', type=str, default='en', choices=['en', 'zh'], help='Query language')
@@ -55,23 +58,39 @@ async def main():
     
     # Import and run experiment
     from experiments.offline_llm_deepresearch_experiment import run_offline_llm_deepresearch_experiment
+from experiments.react_agent import QuantizationConfig
     
+    # Create quantization configuration
+    quantization = QuantizationConfig(args.quantization)
+
     print("\n" + "="*80)
-    print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + vLLM + ReAct + Search)")
+    if quantization.method == "none":
+        print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + ReAct + Search)")
+    else:
+        print(f"EXPERIMENT: OFFLINE LLM DEEP RESEARCH ({args.model} + {quantization.method.upper()} + ReAct + Search)")
     print("="*80)
-    print("⚠️  Note: This will download the model (~8GB) if not cached")
-    print("🚀 Using vLLM for optimized inference")
-    print("⚠️  GPU recommended for acceptable performance")
-    
+
+    if quantization.method == "none":
+        print("⚠️  Note: This will download the model (~8GB) if not cached")
+        print("🚀 Using vLLM for optimized inference")
+        print("⚠️  GPU recommended for acceptable performance")
+    else:
+        print(f"📊 Using {quantization.method.upper()} quantization to reduce GPU memory usage")
+        if quantization.method.startswith("bnb"):
+            print("🔧 Using transformers backend with BitsAndBytes")
+        else:
+            print("🔧 Using vLLM backend with quantization")
+
     results_file = output_dir / "results.jsonl"
     debug_file = output_dir / "debug_pipeline.jsonl" if args.debug else None
     fail_fast = not args.no_fail_fast  # Default True, unless --no-fail-fast is set
-    
+
     summary = await run_offline_llm_deepresearch_experiment(
         test_df.copy(),
         str(results_file),
         max_iterations=args.max_iterations,
         model_id=args.model,
+        quantization=quantization,
         debug_file=str(debug_file) if debug_file else None,
         fail_fast=fail_fast
     )

@@ -66,6 +66,9 @@ class ReActAgent:
         Looks for patterns:
         - <search>query</search> - for search actions
         - <search></search> - for completion (empty search tag)
+        - Alternative completion phrases as fallback
+
+        Handles flexible whitespace in tags and provides robust parsing.
 
         Args:
             response: LLM response text
@@ -73,8 +76,11 @@ class ReActAgent:
         Returns:
             Dict with 'type' and 'content' keys
         """
-        # Look for search tag
-        search_match = re.search(r'<search>(.*?)</search>', response, re.DOTALL | re.IGNORECASE)
+        # Clean response and look for search tag with flexible whitespace
+        response = response.strip()
+
+        # More robust regex to handle whitespace around tags
+        search_match = re.search(r'<search\s*>\s*(.*?)\s*</search\s*>', response, re.DOTALL | re.IGNORECASE)
 
         if search_match:
             query = search_match.group(1).strip()
@@ -86,8 +92,31 @@ class ReActAgent:
             # Non-empty search tag means search action
             return {"type": "Search", "query": query}
 
+        # Check for alternative completion patterns
+        response_lower = response.lower()
+        if ("research complete" in response_lower or
+            "i have gathered sufficient information" in response_lower or
+            "sufficient data collected" in response_lower or
+            "research is complete" in response_lower):
+            return {"type": "ResearchComplete"}
+
         # No clear action found - treat as continuation/thought
         return {"type": "Continue", "content": response}
+
+    def extract_thinking(self, response: str) -> str:
+        """
+        Extract thinking content from LLM response for debugging.
+
+        Args:
+            response: LLM response text
+
+        Returns:
+            Thinking content or empty string if not found
+        """
+        thinking_match = re.search(r'<thinking\s*>(.*?)</thinking\s*>', response, re.DOTALL | re.IGNORECASE)
+        if thinking_match:
+            return thinking_match.group(1).strip()
+        return ""
     
     def format_observation(self, results: List[Dict[str, str]]) -> str:
         """

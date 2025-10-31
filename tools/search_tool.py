@@ -39,7 +39,7 @@ def _get_tavily_search(api_key: str) -> Callable:
     
     client = TavilyClient(api_key=api_key)
     
-    def search(query: str, max_results: int = 3, max_retries: int = 3) -> List[Dict[str, str]]:
+    def search(query: str, max_results: int = 1, max_retries: int = 3) -> List[Dict[str, str]]:
         """Search using Tavily API"""
         for attempt in range(max_retries):
             try:

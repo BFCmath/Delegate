@@ -28,7 +28,7 @@ class ReActAgent:
         self,
         model,  # Can be Gemini model, local model wrapper, or key_manager
         search_tool: Callable[[str], List[Dict]],
-        max_iterations: int = 10,
+        max_iterations: int = 3,
         is_local_model: bool = False,
         model_config: Dict = None  # For API models with key rotation
     ):

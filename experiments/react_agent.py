@@ -61,61 +61,56 @@ class ReActAgent:
     
     def parse_action(self, response: str) -> Dict[str, str]:
         """
-        Parse action from LLM response.
-        
+        Parse action from LLM response using XML-like tags.
+
         Looks for patterns:
-        - Search[query]
-        - Finish[report]
-        
+        - <search>query</search> - for search actions
+        - <search></search> - for completion (empty search tag)
+
         Args:
             response: LLM response text
-            
+
         Returns:
             Dict with 'type' and 'content' keys
         """
-        # PRIORITY: Check for research complete signal (new two-phase approach)
-        if ("RESEARCH_COMPLETE" in response or
-            "research complete" in response.lower() or
-            "Research complete" in response):
-            return {"type": "ResearchComplete"}
+        # Look for search tag
+        search_match = re.search(r'<search>(.*?)</search>', response, re.DOTALL | re.IGNORECASE)
 
-        # Also check for completion indicators
-        response_lower = response.lower()
-        if (response_lower.startswith("research complete") or
-            "i have gathered sufficient information" in response_lower or
-            "sufficient data collected" in response_lower):
-            return {"type": "ResearchComplete"}
-        
-        # Look for Search action
-        search_match = re.search(r'Search\[(.*?)\]', response)
         if search_match:
             query = search_match.group(1).strip()
+
+            # Empty search tag means research complete
+            if not query:
+                return {"type": "ResearchComplete"}
+
+            # Non-empty search tag means search action
             return {"type": "Search", "query": query}
-        
+
         # No clear action found - treat as continuation/thought
         return {"type": "Continue", "content": response}
     
     def format_observation(self, results: List[Dict[str, str]]) -> str:
         """
-        Format search results for LLM consumption.
-        
+        Format search results for LLM consumption using <output> tags.
+
         Args:
             results: List of dicts with 'title', 'url', 'content'
-            
+
         Returns:
-            Formatted string
+            Formatted string wrapped in <output> tags
         """
         if not results:
-            return "Observation: No search results found."
-        
-        formatted = ["Observation: Search results:"]
+            return "<output>No search results found.</output>"
+
+        formatted = ["<output>Search results:"]
         for i, result in enumerate(results, 1):
             formatted.append(
                 f"\n[{i}] {result['title']}\n"
                 f"URL: {result['url']}\n"
                 f"{result['content'][:500]}..."  # Truncate long content
             )
-        
+
+        formatted.append("</output>")
         return "\n".join(formatted)
     
     async def run(self, question: str) -> ReActResult:
@@ -271,7 +266,7 @@ class ReActAgent:
                     
                 except Exception as e:
                     print(f"    ⚠️  Search error: {e}")
-                    observation = f"Observation: Search failed - {str(e)}"
+                    observation = f"<output>Search failed - {str(e)}</output>"
                 
                 scratchpad.append(observation)
             
@@ -413,7 +408,7 @@ class LocalModelWrapper:
     Wrapper for local models using vLLM for faster inference.
     """
 
-    def __init__(self, model_name: str, max_new_tokens: int = 32768, dtype: str = "half"):
+    def __init__(self, model_name: str, max_new_tokens: int = 4096, dtype: str = "half"):
         try:
             from vllm import LLM, SamplingParams
             self.vllm_available = True

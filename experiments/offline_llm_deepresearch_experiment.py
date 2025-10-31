@@ -56,7 +56,7 @@ async def run_offline_llm_deepresearch_experiment(
     print(f"\n🚀 Initializing vLLM with model: {model_id}...")
     model_wrapper = LocalModelWrapper(
         model_name=model_id,
-        max_new_tokens=32768,  # Much longer for deep research articles
+        max_new_tokens=4096,  # Much longer for deep research articles
         dtype="half"  # Use half precision for faster inference
     )
 

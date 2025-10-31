@@ -3,7 +3,50 @@
 # DEEP RESEARCH EXPERIMENTS (ReAct Framework)
 # ============================================================================
 
-REACT_SYSTEM_PROMPT = """You are a research assistant in the RESEARCH PHASE. Your ONLY task is to gather information through web searches. You MUST STOP immediately after gathering sufficient information.
+REACT_SYSTEM_PROMPT = """You are a research assistant in the RESEARCH PHASE. Your task is to gather comprehensive information through web searches to answer research questions.
+
+REQUIRED FORMAT:
+<thinking>
+Analyze what information you need based on the previous search results.
+Think step by step about gaps in your knowledge and what to search for next.
+</thinking>
+
+<search>
+Your specific search query here. Use an empty search tag when you have gathered sufficient information: <search></search>
+</search>
+
+AVAILABLE ACTIONS:
+1. Perform a search using the <search> tags
+2. Complete research when you have sufficient information using an empty <search></search> tag
+
+IMPORTANT RULES:
+- Always use both <thinking> and <search> tags in your response
+- Only perform one search per response
+- When you have enough comprehensive information to answer the research question, use an empty <search></search> tag
+- Do not write reports or conclusions in this phase - only gather information
+
+EXAMPLE:
+Research Question: What are the benefits of renewable energy?
+
+<thinking>
+I need to understand the environmental, economic, and health benefits of renewable energy sources like solar, wind, and hydro power. Let me start with a broad search.
+</thinking>
+
+<search>
+renewable energy benefits environmental economic health
+</search>
+
+[After search results are provided...]
+
+<thinking>
+The search results show environmental benefits like reduced emissions, economic benefits like job creation, and health benefits like cleaner air. I should search for more specific data on each benefit.
+</thinking>
+
+<search>
+renewable energy job creation statistics 2024
+</search>"""
+
+REACT_SYSTEM_PROMPT_BU = """You are a research assistant in the RESEARCH PHASE. Your ONLY task is to gather information through web searches. You MUST STOP immediately after gathering sufficient information.
 
 CRITICAL RULES:
 1. You are in RESEARCH PHASE only - do NOT write reports or conclusions
@@ -26,20 +69,13 @@ Action: Search[Japan elderly population statistics 2020-2050]
 
 Thought: I have enough data about demographics and economics.
 Action: RESEARCH_COMPLETE
-
-ALTERNATIVE COMPLETION PHRASES:
-- "I have gathered sufficient information"
-- "I have enough data to proceed"
-- "Research phase complete"
-
-STOP IMMEDIATELY AFTER ANY COMPLETION SIGNAL - DO NOT GENERATE MORE THOUGHTS OR ACTIONS!
 """
 
 REACT_USER_PROMPT = """Research Question: {question}
 
-Begin your research using the ReAct framework. Show your Thought and Action clearly.
+Begin your research by analyzing what information you need and performing your first search.
 
-IMPORTANT: Stop immediately when you have gathered sufficient information. Do not continue generating additional thoughts or actions after signaling completion."""
+Use the required <reasoning> and <search> tag format. Gather comprehensive information through multiple searches if needed. When you have sufficient information to fully answer the research question, complete your research with an empty <search></search> tag."""
 
 REPORT_GENERATOR_PROMPT_DEEPRESEARCH = """You are a professional research report writer in the REPORT GENERATION PHASE.
 
@@ -86,7 +122,7 @@ def format_search_results_for_report(search_history: list) -> str:
     
     Args:
         search_history: List of dicts with 'query' and 'results'
-        
+            
     Returns:
         Formatted string with all search findings
     """

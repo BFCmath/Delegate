@@ -668,14 +668,22 @@ class LocalModelWrapper:
                     do_sample=True,
                     pad_token_id=self.tokenizer.pad_token_id,
                     eos_token_id=self.tokenizer.eos_token_id,
-                    stop_strings=["<|im_end|>", "<|endoftext|>", "</s>"],
                 )
 
-            # Decode and clean response
+            # Decode response
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
             # Remove the input prompt from the response
             if generated_text.startswith(prompt):
                 generated_text = generated_text[len(prompt):].strip()
+
+            # Check for stop strings and truncate if found
+            stop_strings = ["<|im_end|>", "<|endoftext|>", "</s>"]
+            for stop_string in stop_strings:
+                stop_index = generated_text.find(stop_string)
+                if stop_index != -1:
+                    generated_text = generated_text[:stop_index].strip()
+                    break
 
             return generated_text
 

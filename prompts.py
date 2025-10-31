@@ -8,6 +8,21 @@ REACT_SYSTEM_PROMPT = """You are a research assistant in the RESEARCH PHASE. You
 REQUIRED FORMAT:
 <thinking>
 Analyze what information you need based on the previous search results.
+</thinking>
+
+<search>
+Your specific search query here. Use an empty search tag when you have gathered sufficient information: <search></search>
+</search>
+
+IMPORTANT RULES:
+- Always use both <thinking> and <search> tags in your response
+- When you have enough comprehensive information to answer the research question, use an empty <search></search> tag"""
+
+REACT_SYSTEM_PROMPT_BU1 = """You are a research assistant in the RESEARCH PHASE. Your task is to gather comprehensive information through web searches to answer research questions.
+
+REQUIRED FORMAT:
+<thinking>
+Analyze what information you need based on the previous search results.
 Think step by step about gaps in your knowledge and what to search for next.
 </thinking>
 

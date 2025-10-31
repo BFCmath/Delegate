@@ -643,7 +643,22 @@ class LocalModelWrapper:
     def _generate_vllm(self, prompt: str) -> str:
         """Generate using vLLM backend"""
         try:
-            outputs = self.model.generate([prompt], self.sampling_params)
+            # Add search tag to stop strings to prevent over-generation
+            stop_strings = ["<|im_end|>", "<|endoftext|>", "</s>", "</search>"]
+
+            # Create new sampling params with additional stop strings
+            from vllm import SamplingParams
+            current_stops = list(self.sampling_params.stop) if self.sampling_params.stop else []
+            all_stops = current_stops + [s for s in stop_strings if s not in current_stops]
+
+            sampling_params = SamplingParams(
+                temperature=self.sampling_params.temperature,
+                top_p=self.sampling_params.top_p,
+                max_tokens=self.sampling_params.max_tokens,
+                stop=all_stops
+            )
+
+            outputs = self.model.generate([prompt], sampling_params)
             generated_text = outputs[0].outputs[0].text
             return generated_text.strip()
         except Exception as e:
@@ -677,12 +692,16 @@ class LocalModelWrapper:
             if generated_text.startswith(prompt):
                 generated_text = generated_text[len(prompt):].strip()
 
-            # Check for stop strings and truncate if found
-            stop_strings = ["<|im_end|>", "<|endoftext|>", "</s>"]
+            # Check for stop strings and truncate if found (including search tag)
+            stop_strings = ["<|im_end|>", "<|endoftext|>", "</s>", "</search>"]
             for stop_string in stop_strings:
                 stop_index = generated_text.find(stop_string)
                 if stop_index != -1:
-                    generated_text = generated_text[:stop_index].strip()
+                    # Include the stop string if it's </search> to ensure proper parsing
+                    if stop_string == "</search>":
+                        generated_text = generated_text[:stop_index + len(stop_string)].strip()
+                    else:
+                        generated_text = generated_text[:stop_index].strip()
                     break
 
             return generated_text
